@@ -20,8 +20,7 @@
     *   Основные операторы: `SELECT`, `FROM`, `WHERE`, `JOIN` (INNER, LEFT, RIGHT, FULL OUTER), `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`.
     *   Агрегатные функции: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`.
     *   Подзапросы (в `SELECT`, `FROM`, `WHERE`).
-    *   Оконные функции: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LAG()`, `LEAD()`, `SUM() OVER(...)`, `PARTITION BY`.
-      https://bra.in/8qEN78
+    *   Оконные функции: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LAG()`, `LEAD()`, `SUM() OVER(...)`, `PARTITION BY`.      https://bra.in/8qEN78
 
            <функция> OVER (
     [PARTITION BY <столбец1>, <столбец2>, ...]
@@ -32,37 +31,176 @@
 *   **Практика:** Решите несколько задач на SQL (например, на LeetCode, HackerRank, SQLBolt). Потренируйтесь писать сложные запросы с JOIN'ами и оконными функциями.
 *   **Вопросы к себе:** Какие типы JOIN'ов вы знаете? В чем разница между `WHERE` и `HAVING`? Что такое индекс и как он влияет на производительность?
 
-**2. Oracle:**
+**2. Oracle:** https://bra.in/2qwVkD
 
 *   **Темы для повторения:**
-    *   Специфичные особенности Oracle (по сравнению с другими СУБД).
-    *   PL/SQL: структура блока, объявление переменных, циклы (`FOR`, `WHILE`), условия (`IF-THEN-ELSE`), исключения (`EXCEPTION`).
-    *   Хранимые процедуры и функции.
-    *   Курсоры (явные и неявные).
-    *   Типы данных Oracle.
-    *   Представления (`VIEW`).
+    *   Специфичные особенности Oracle (по сравнению с другими СУБД).https://bra.in/2qwVkD
+    *   PL/SQL: структура блока, объявление переменных, циклы (`FOR`, `WHILE`), условия (`IF-THEN-ELSE`), исключения (`EXCEPTION`).https://bra.in/3jbmkB
+    *   Хранимые процедуры и функции. https://bra.in/7j99ZR
+    *   Курсоры (явные и неявные). https://bra.in/4pRMby
+    *   Типы данных Oracle. https://bra.in/9jgzD2
+    *   Представления (`VIEW`). https://bra.in/8vNMYz
     *   Пакеты (`PACKAGE`).
-*   **Практика:** Повторите синтаксис PL/SQL. Попробуйте написать простую процедуру или функцию (например, вычисление чего-то или обновление данных с обработкой ошибок).
-*   **Вопросы к себе:** Как объявить переменную в PL/SQL? В чем разница между процедурой и функцией в Oracle? Что такое курсор?
+*   **Практика:** Повторите синтаксис PL/SQL. Попробуйте написать простую процедуру или функцию (например, вычисление чего-то или обновление данных с обработкой ошибок). Хорошо, давайте напишем простую **процедуру** на **PL/SQL** (Oracle), которая **обновляет зарплату сотрудника** с обработкой ошибок, и простую **функцию** на **PL/pgSQL** (PostgreSQL), которая **вычисляет бонус**.
+
+---
+
+### **1. Пример Процедуры на PL/SQL (Oracle)**
+
+**Назначение:** Обновить зарплату сотрудника в таблице `employees` по его `employee_id`. Добавить обработку ошибок (например, если сотрудник не найден или зарплата отрицательна).
+
+```sql
+CREATE OR REPLACE PROCEDURE update_employee_salary_proc (
+    p_employee_id IN employees.employee_id%TYPE,
+    p_new_salary  IN employees.salary%TYPE,
+    p_updated_by  IN VARCHAR2 DEFAULT USER -- Пользователь, который вызывает процедуру
+)
+IS
+    -- Объявление пользовательского исключения для некорректной зарплаты
+    e_invalid_salary EXCEPTION;
+    PRAGMA EXCEPTION_INIT(e_invalid_salary, -20001); -- Привязка к коду ошибки, если нужно
+
+    v_old_salary employees.salary%TYPE; -- Переменная для хранения старой зарплаты
+BEGIN
+    -- Проверка: новая зарплата не отрицательна
+    IF p_new_salary < 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Зарплата не может быть отрицательной.');
+    END IF;
+
+    -- Получаем старую зарплату для аудита (или просто проверки существования)
+    SELECT salary
+    INTO v_old_salary
+    FROM employees
+    WHERE employee_id = p_employee_id;
+
+    -- Обновление зарплаты
+    UPDATE employees
+    SET salary = p_new_salary,
+        last_modified_by = p_updated_by, -- Предполагаем, что есть такой столбец
+        last_modified_date = SYSDATE
+    WHERE employee_id = p_employee_id;
+
+    -- Выводим информацию об обновлении (для отладки в DBMS_OUTPUT)
+    DBMS_OUTPUT.PUT_LINE('Зарплата сотрудника ID ' || p_employee_id || ' обновлена с ' || v_old_salary || ' на ' || p_new_salary);
+
+    COMMIT; -- Фиксируем изменения
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Обработка ошибки: сотрудник с указанным ID не найден
+        DBMS_OUTPUT.PUT_LINE('Ошибка: Сотрудник с ID ' || p_employee_id || ' не найден.');
+        ROLLBACK; -- Откатываем транзакцию (хотя в данном случае она пустая)
+    WHEN TOO_MANY_ROWS THEN
+        -- Обработка ошибки: если запрос SELECT INTO вернул больше одной строки (теоретически, если индекс нарушен)
+        DBMS_OUTPUT.PUT_LINE('Ошибка: Найдено более одной строки для ID ' || p_employee_id || '. Проверьте уникальность.');
+        ROLLBACK;
+    WHEN e_invalid_salary THEN
+        -- Обработка пользовательской ошибки
+        DBMS_OUTPUT.PUT_LINE('Ошибка: ' || SQLERRM); -- SQLERRM содержит текст сообщения
+        ROLLBACK;
+    WHEN OTHERS THEN
+        -- Обработка всех остальных неожиданных ошибок
+        DBMS_OUTPUT.PUT_LINE('Непредвиденная ошибка: ' || SQLERRM);
+        ROLLBACK; -- Откатываем транзакцию в случае ошибки
+END update_employee_salary_proc;
+/
+```
+
+**Как использовать:**
+
+```sql
+-- Вызов процедуры
+BEGIN
+    update_employee_salary_proc(p_employee_id => 100, p_new_salary => 75000, p_updated_by => 'ANONYMOUS_USER');
+END;
+/
+```
+
+---
+
+### **2. Пример Функции на PL/pgSQL (PostgreSQL)**
+
+**Назначение:** Вычислить бонус для сотрудника на основе его `employee_id` и фиксированного процента. Возвращает значение бонуса. Добавить обработку ошибок (например, если сотрудник не найден).
+
+```sql
+CREATE OR REPLACE FUNCTION public.calculate_bonus_func (
+    p_employee_id INTEGER,
+    p_bonus_percent DECIMAL DEFAULT 0.1 -- 10% по умолчанию
+)
+RETURNS DECIMAL -- Возвращаем числовое значение бонуса
+AS $$
+DECLARE
+    v_salary DECIMAL;
+    v_bonus DECIMAL;
+BEGIN
+    -- Получаем зарплату сотрудника
+    SELECT salary INTO v_salary
+    FROM employees -- Предполагаем, что таблица существует в схеме public
+    WHERE employee_id = p_employee_id;
+
+    -- Проверяем, была ли найдена запись
+    IF NOT FOUND THEN -- FOUND возвращает FALSE, если SELECT INTO не нашел строку
+        RAISE EXCEPTION 'Сотрудник с ID % не найден.', p_employee_id;
+    END IF;
+
+    -- Вычисляем бонус
+    v_bonus := v_salary * p_bonus_percent;
+
+    -- Возвращаем значение бонуса
+    RETURN v_bonus;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        -- Это исключение может сработать, если в таблице будет ошибка (например, дубль ID, но обычно FOUND ловит отсутствие)
+        -- В данном случае, FOUND выше ловит отсутствие, но на всякий случай оставим
+        RAISE EXCEPTION 'Сотрудник с ID % не найден (обработка NO_DATA_FOUND).', p_employee_id;
+    WHEN OTHERS THEN
+        -- Обработка всех остальных ошибок
+        RAISE EXCEPTION 'Ошибка при вычислении бонуса: %', SQLERRM;
+END;
+$$
+LANGUAGE plpgsql;
+```
+
+**Как использовать:**
+
+```sql
+-- Вызов функции в SELECT
+SELECT public.calculate_bonus_func(100, 0.15) AS calculated_bonus;
+
+-- Вызов функции в PL/pgSQL блоке
+DO $$
+DECLARE
+    v_bonus DECIMAL;
+BEGIN
+    v_bonus := public.calculate_bonus_func(101);
+    RAISE NOTICE 'Бонус для сотрудника 101: %', v_bonus;
+END $$;
+```
+
+---
+
+Эти примеры демонстрируют базовую структуру процедур и функций, объявление переменных, условную логику, обновление/выборку данных и обработку ошибок в соответствующих диалектах PL/SQL и PL/pgSQL.
+*   **Вопросы к себе:** Как объявить переменную в PL/SQL? В чем разница между процедурой и функцией в Oracle? Что такое курсор? https://bra.in/2qZMmd
 
 **3. PostgreSQL:**
 
 *   **Темы для повторения:**
-    *   Специфичные особенности PostgreSQL (по сравнению с другими СУБД).
-    *   PL/pgSQL: структура блока, объявление переменных, циклы, условия, исключения.
-    *   Хранимые процедуры и функции.
-    *   Курсоры.
-    *   Типы данных PostgreSQL (включая JSON, массивы).
-    *   Представления (`VIEW`), материализованные представления (`MATERIALIZED VIEW`).
-    *   Рекурсивные CTE.
-*   **Практика:** Повторите синтаксис PL/pgSQL. Попробуйте написать простую процедуру или функцию.
-*   **Вопросы к себе:** Какие типы данных JSON есть в PostgreSQL? В чем особенности PL/pgSQL по сравнению с PL/SQL Oracle?
+    *   Специфичные особенности PostgreSQL (по сравнению с другими СУБД). https://bra.in/3j99ZR
+    *   PL/pgSQL: структура блока, объявление переменных, циклы, условия, исключения. https://bra.in/7pRMby
+    *   Хранимые процедуры и функции.https://bra.in/4jgzD2
+    *   Курсоры.https://bra.in/9qEN78
+    *   Типы данных PostgreSQL (включая JSON, массивы). https://bra.in/5vNMYz
+    *   Представления (`VIEW`), материализованные представления (`MATERIALIZED VIEW`). https://bra.in/8pJ95B
+    *   Рекурсивные CTE. https://bra.in/2jbmkB
+*   **Практика:** Повторите синтаксис PL/pgSQL. Попробуйте написать простую процедуру или функцию. https://bra.in/3pRMby
+*   **Вопросы к себе:** Какие типы данных JSON есть в PostgreSQL? В чем особенности PL/pgSQL по сравнению с PL/SQL Oracle? https://bra.in/7jgzD2
 
 **4. S3 (Amazon Simple Storage Service):**
 
 *   **Темы для повторения:**
-    *   Что такое S3, основные понятия (Bucket, Object, Key).
-    *   Основные операции: PUT, GET, DELETE.
+    *   Что такое S3, основные понятия (Bucket, Object, Key). https://bra.in/9vNMYz
+    *   Основные операции: PUT, GET, DELETE.https://bra.in/5pJ95B
     *   Настройка разрешений (IAM, Bucket Policy, ACL).
     *   Использование S3 как хранилища данных (data lake).
     *   Интеграция S3 с другими инструментами (Trino, Spark и т.д.).
